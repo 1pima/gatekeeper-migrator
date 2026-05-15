@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS vault.card (
     CONSTRAINT fk_card_user FOREIGN KEY (user_id) REFERENCES identity.user(id)
 );
 CREATE INDEX IF NOT EXISTS idx_card_user_id ON vault.card(user_id);
-CREATE INDEX IF NOT EXISTS idx_card_hash ON vault.card(hash); -- Поиск карты по хэшу частая операция
+CREATE INDEX IF NOT EXISTS idx_card_hash ON vault.card(hash);
 
 CREATE TABLE IF NOT EXISTS vault.token (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -82,8 +82,8 @@ CREATE TABLE IF NOT EXISTS vault.token (
     user_id BIGINT NOT NULL,
     card_id BIGINT NOT NULL,
     CONSTRAINT fk_token_user FOREIGN KEY (user_id) REFERENCES identity.user(id),
-    -- ВНИМАНИЕ: Сделано строго по твоему коду ForeignKey(User.id), хотя логически должно быть vault.card(id)
-    CONSTRAINT fk_token_card FOREIGN KEY (card_id) REFERENCES identity.user(id)
+    -- ИСПРАВЛЕН БАГ: теперь ссылка идет на vault.card(id), а не identity.user(id)
+    CONSTRAINT fk_token_card FOREIGN KEY (card_id) REFERENCES vault.card(id)
 );
 CREATE INDEX IF NOT EXISTS idx_token_user_id ON vault.token(user_id);
 CREATE INDEX IF NOT EXISTS idx_token_card_id ON vault.token(card_id);
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS risk.accumulator (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     reset_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
-    version INTEGER DEFAULT 1, -- Optimistic locking
+    version INTEGER DEFAULT 1,
     token_id BIGINT NOT NULL,
     CONSTRAINT fk_accumulator_token FOREIGN KEY (token_id) REFERENCES vault.token(id)
 );
@@ -123,7 +123,8 @@ CREATE INDEX IF NOT EXISTS idx_accumulator_token_id ON risk.accumulator(token_id
 -- SCHEMA: processing
 -- ==========================================
 CREATE TABLE IF NOT EXISTS processing.transaction (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    -- ИЗМЕНЕНИЕ: Тип UUID. Генерируется на уровне приложения, поэтому без DEFAULT
+    id UUID PRIMARY KEY,
     reference TEXT NOT NULL,
     ext_id TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -152,11 +153,10 @@ CREATE TABLE IF NOT EXISTS processing.status_history (
     code TEXT,
     message TEXT,
     description TEXT,
-    transaction_id BIGINT NOT NULL,
+    transaction_id UUID NOT NULL,
     CONSTRAINT fk_sh_transaction FOREIGN KEY (transaction_id) REFERENCES processing.transaction(id)
 );
 CREATE INDEX IF NOT EXISTS idx_sh_transaction_id ON processing.status_history(transaction_id);
--- Оптимизация финтеха: моментальный поиск актуального статуса
 CREATE INDEX IF NOT EXISTS idx_sh_is_actual ON processing.status_history(transaction_id) WHERE is_actual = TRUE;
 
 -- ==========================================
